@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mesa Nego — demo</title>
+<style>
+  :root { --ink:#1d2330; --muted:#6b7280; --line:#e5e7eb; --bg:#f7f8fa; --card:#fff; --accent:#0f766e; --warn:#b45309; --ok:#15803d; --bad:#b91c1c; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color:var(--ink); background:var(--bg); }
+  header { background:#fff; border-bottom:1px solid var(--line); padding:16px 24px; display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; }
+  header h1 { font-size:18px; margin:0; }
+  header small { color:var(--muted); }
+  main { max-width:1100px; margin:0 auto; padding:24px; display:grid; gap:20px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px; }
+  .card h2 { font-size:16px; margin:0 0 12px; }
+  .note { font-size:12px; color:var(--muted); }
+  .stepper { display:flex; gap:6px; flex-wrap:wrap; }
+  .step { flex:1; min-width:100px; padding:10px; border-radius:8px; border:1px solid var(--line); font-size:12px; color:var(--muted); background:#fff; }
+  .step b { display:block; color:var(--ink); font-size:13px; }
+  .step.done { border-color:var(--ok); color:var(--ok); }
+  .step.current { border-color:var(--accent); background:#f0fdfa; }
+  .step.current b { color:var(--accent); }
+  .cases { display:flex; gap:8px; flex-wrap:wrap; }
+  button { font:inherit; padding:9px 14px; border-radius:8px; border:1px solid var(--line); background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  button.primary:disabled { background:#9ca3af; border-color:#9ca3af; cursor:not-allowed; }
+  button.active { border-color:var(--accent); color:var(--accent); font-weight:600; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width:760px) { .grid2 { grid-template-columns:1fr; } }
+  label { display:block; font-size:13px; margin:8px 0 4px; color:var(--muted); }
+  input[type=number], input[type=text] { width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px; font:inherit; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); }
+  th { font-size:12px; color:var(--muted); font-weight:600; }
+  .tag { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; }
+  .tag.ok { background:#dcfce7; color:var(--ok); }
+  .tag.warn { background:#fef3c7; color:var(--warn); }
+  .tag.bad { background:#fee2e2; color:var(--bad); }
+  .tag.info { background:#e0f2f1; color:var(--accent); }
+  .kpi { display:flex; gap:16px; flex-wrap:wrap; }
+  .kpi div { flex:1; min-width:140px; background:#f9fafb; border:1px solid var(--line); border-radius:10px; padding:12px; }
+  .kpi span { display:block; font-size:12px; color:var(--muted); }
+  .kpi strong { font-size:20px; }
+  .log { font-family: ui-monospace, Menlo, Consolas, monospace; font-size:12px; background:#0f172a; color:#e2e8f0; border-radius:10px; padding:12px; max-height:220px; overflow:auto; }
+  .log div { padding:2px 0; }
+  .hidden { display:none; }
+  .actions { display:flex; gap:10px; justify-content:space-between; align-items:center; margin-top:16px; flex-wrap:wrap; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Mesa Nego</h1>
+    <small>Demo de negociación asistida por agente · datos ficticios · ERP simulado</small>
+  </div>
+  <div class="cases" id="cases"></div>
+</header>
+
+<main>
+  <section class="card">
+    <div class="stepper" id="stepper"></div>
+  </section>
+
+  <section class="card" id="stage"></section>
+
+  <section class="card">
+    <h2>Registro de auditoría</h2>
+    <div class="log" id="log"><div>Sin eventos todavía.</div></div>
+    <p class="note">Registro de solo escritura. Cada acción del agente y de las personas queda anotada.</p>
+  </section>
+</main>
+
+<script>
+const STEPS = [
+  { id:'define',   title:'Definir compra' },
+  { id:'invite',   title:'Invitar proveedores' },
+  { id:'offers',   title:'Recoger ofertas' },
+  { id:'evaluate', title:'Evaluar con reglas' },
+  { id:'negotiate',title:'Negociar' },
+  { id:'review',   title:'Revisión humana' },
+  { id:'award',    title:'Adjudicar' },
+  { id:'erp',      title:'Enviar a ERP' },
+  { id:'audit',    title:'Auditoría final' }
+];
+
+const CASES = [
+  {
+    key:'pp', name:'Polipropileno', buyer:'Fabricante de envases ficticio (Buyer A)',
+    unit:'€/t', volume:40, baseline:1250, limit:1300, counterPct:0.015,
+    suppliers:[
+      { name:'Polímeros Norte', price:1240 },
+      { name:'Resinas Sur',     price:1205 },
+      { name:'Granulados Este', price:1330 }
+    ]
+  },
+  {
+    key:'pallet', name:'Transporte de palés', buyer:'Distribuidor ficticio (Buyer B)',
+    unit:'€/viaje', volume:120, baseline:310, limit:295, counterPct:0.02,
+    suppliers:[
+      { name:'Logística Río',   price:298 },
+      { name:'Transportes Monte', price:286 },
+      { name:'Carga Directa',   price:322 }
+    ]
+  },
+  {
+    key:'crm', name:'Licencias CRM', buyer:'Empresa de servicios ficticia (Buyer C)',
+    unit:'€/usuario/año', volume:50, baseline:420, limit:390, counterPct:0.01,
+    suppliers:[
+      { name:'CloudSales',     price:395 },
+      { name:'ClientBase Pro', price:372 },
+      { name:'Pipeline One',   price:430 }
+    ]
+  }
+];
+
+let state;
+let auditLog = [];
+let currentCase = CASES[0];
+
+function resetState() {
+  state = {
+    step: 0,
+    invited: [],
+    offers: null,
+    evaluation: null,
+    counterFinal: null,
+    approved: false,
+    awarded: false,
+    erpId: null
+  };
+  auditLog = [];
+  audit('Caso iniciado: ' + currentCase.name + ' (' + currentCase.buyer + ')');
+}
+
+function audit(msg) {
+  const t = new Date().toLocaleTimeString('es-ES', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  auditLog.push(t + '  ' + msg);
+  renderLog();
+}
+
+function renderLog() {
+  const el = document.getElementById('log');
+  el.innerHTML = auditLog.length
+    ? auditLog.map(l => '<div>' + escapeHtml(l) + '</div>').join('')
+    : '<div>Sin eventos todavía.</div>';
+  el.scrollTop = el.scrollHeight;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function fmt(n) { return n.toLocaleString('es-ES', { maximumFractionDigits: 0 }); }
+function pct(n) { return (n * 100).toLocaleString('es-ES', { maximumFractionDigits: 1 }) + ' %'; }
+
+function renderCases() {
+  document.getElementById('cases').innerHTML = CASES.map(c =>
+    '<button data-case="' + c.key + '" class="' + (c.key === currentCase.key ? 'active' : '') + '">' + c.name + '</button>'
+  ).join('');
+  document.querySelectorAll('[data-case]').forEach(b => b.onclick = () => {
+    currentCase = CASES.find(c => c.key === b.dataset.case);
+    resetState();
+    render();
+  });
+}
+
+function renderStepper() {
+  document.getElementById('stepper').innerHTML = STEPS.map((s, i) => {
+    const cls = i < state.step ? 'done' : (i === state.step ? 'current' : '');
+    return '<div class="step ' + cls + '"><b>' + (i + 1) + '. ' + s.title + '</b></div>';
+  }).join('');
+}
+
+function next() { state.step++; render(); }
+
+function render() {
+  renderCases();
+  renderStepper();
+  const stage = document.getElementById('stage');
+  const id = STEPS[state.step].id;
+  const view = {
+    define: viewDefine, invite: viewInvite, offers: viewOffers, evaluate: viewEvaluate,
+    negotiate: viewNegotiate, review: viewReview, award: viewAward, erp: viewErp, audit: viewAudit
+  }[id];
+  stage.innerHTML = view();
+  bind();
+}
+
+/* ---------- Paso 1: definir compra ---------- */
+function viewDefine() {
+  const c = currentCase;
+  return `
+    <h2>1. Definir la compra</h2>
+    <p class="note">El comprador fija el producto, el volumen y el precio máximo que acepta. El agente no puede salirse de estos límites.</p>
+    <div class="grid2">
+      <div>
+        <label>Producto</label>
+        <input type="text" value="${escapeHtml(c.name)}" disabled>
+        <label>Volumen</label>
+        <input type="number" value="${c.volume}" disabled>
+      </div>
+      <div>
+        <label>Precio de referencia (${c.unit})</label>
+        <input type="number" value="${c.baseline}" disabled>
+        <label>Precio máximo aceptado (${c.unit})</label>
+        <input type="number" value="${c.limit}" disabled>
+      </div>
+    </div>
+    <div class="actions"><span class="note">${c.buyer}</span><button class="primary" data-next>Continuar</button></div>`;
+}
+
+/* ---------- Paso 2: invitar proveedores ---------- */
+function viewInvite() {
+  const c = currentCase;
+  return `
+    <h2>2. Invitar proveedores</h2>
+    <p class="note">Cada proveedor ve solo su propia oferta. Selecciona a quién invitar.</p>
+    <table>
+      <tr><th></th><th>Proveedor</th></tr>
+      ${c.suppliers.map((s, i) => `
+        <tr><td><input type="checkbox" data-inv="${i}" ${state.invited.includes(i) ? 'checked' : ''}></td>
+        <td>${escapeHtml(s.name)}</td></tr>`).join('')}
+    </table>
+    <div class="actions"><span class="note">Invitados: ${state.invited.length}</span>
+      <button class="primary" data-next ${state.invited.length < 2 ? 'disabled' : ''}>Enviar invitaciones</button></div>`;
+}
+
+/* ---------- Paso 3: ofertas ---------- */
+function viewOffers() {
+  const c = currentCase;
+  if (!state.offers) {
+    state.offers = state.invited.map(i => ({ ...c.suppliers[i] }));
+    audit('Invitaciones enviadas a ' + state.offers.map(o => o.name).join(', '));
+    audit('Ofertas recibidas: ' + state.offers.length);
+  }
+  return `
+    <h2>3. Ofertas recibidas</h2>
+    <p class="note">Precios simulados. Los proveedores no ven las ofertas de los demás.</p>
+    <table>
+      <tr><th>Proveedor</th><th>Precio (${c.unit})</th></tr>
+      ${state.offers.map(o => `<tr><td>${escapeHtml(o.name)}</td><td>${fmt(o.price)}</td></tr>`).join('')}
+    </table>
+    <div class="actions"><span class="note">Referencia: ${fmt(c.baseline)} · Límite: ${fmt(c.limit)}</span>
+      <button class="primary" data-next>Evaluar con reglas</button></div>`;
+}
+
+/* ---------- Paso 4: evaluación por reglas ---------- */
+function viewEvaluate() {
+  const c = currentCase;
+  if (!state.evaluation) {
+    state.evaluation = state.offers.map(o => ({ ...o, within: o.price <= c.limit }));
+    const inLimit = state.evaluation.filter(o => o.within).length;
+    audit('Motor de reglas: ' + inLimit + ' dentro de límite, ' + (state.evaluation.length - inLimit) + ' fuera');
+    state.evaluation.filter(o => !o.within).forEach(o => audit('Oferta fuera de límite de ' + o.name + ' marcada para revisión humana'));
+  }
+  return `
+    <h2>4. Evaluación con reglas</h2>
+    <p class="note">Las ofertas dentro de límite pueden seguir negociándose. Las que están fuera pasan a una persona.</p>
+    <table>
+      <tr><th>Proveedor</th><th>Precio</th><th>Estado</th></tr>
+      ${state.evaluation.map(o => `
+        <tr><td>${escapeHtml(o.name)}</td><td>${fmt(o.price)}</td>
+        <td>${o.within ? '<span class="tag ok">Dentro de límite</span>' : '<span class="tag bad">Fuera de límite</span>'}</td></tr>`).join('')}
+    </table>
+    <div class="actions"><span class="note"></span><button class="primary" data-next ${state.evaluation.some(o => o.within) ? '' : 'disabled'}>Iniciar negociación</button></div>`;
+}
+
+/* ---------- Paso 5: negociación ---------- */
+function viewNegotiate() {
+  const c = currentCase;
+  const inLimit = state.evaluation.filter(o => o.within);
+  const best = inLimit.reduce((a, b) => (a.price <= b.price ? a : b));
+  if (state.counterFinal === null) {
+    state.counterFinal = Math.round(best.price * (1 - c.counterPct));
+    audit('Agente contraoferta a ' + best.name + ': ' + fmt(state.counterFinal) + ' ' + c.unit);
+    audit('Agente cierra ronda con contraoferta dentro de límites');
+  }
+  const savings = 1 - state.counterFinal / c.baseline;
+  return `
+    <h2>5. Negociación del agente</h2>
+    <p class="note">El agente compara ofertas y responde a los proveedores dentro de los límites fijados.</p>
+    <div class="kpi">
+      <div><span>Mejor oferta inicial</span><strong>${fmt(best.price)}</strong></div>
+      <div><span>Contraoferta final</span><strong>${fmt(state.counterFinal)}</strong></div>
+      <div><span>Ahorro frente a referencia</span><strong>${pct(savings)}</strong></div>
+    </div>
+    <p class="note" style="margin-top:12px">Proveedor: ${escapeHtml(best.name)}</p>
+    <div class="actions"><span class="note"></span><button class="primary" data-next>Pasar a revisión humana</button></div>`;
+}
+
+/* ---------- Paso 6: revisión humana ---------- */
+function viewReview() {
+  const c = currentCase;
+  const outside = state.evaluation.filter(o => !o.within);
+  if (outside.length === 0) {
+    return `
+      <h2>6. Revisión humana</h2>
+      <p class="note">No hay ofertas fuera de límite. No es necesaria ninguna acción adicional.</p>
+      <div class="actions"><span class="note"></span><button class="primary" data-next>Continuar a adjudicación</button></div>`;
+  }
+  return `
+    <h2>6. Revisión humana</h2>
+    <p class="note">Las ofertas fuera de límite nunca se adjudican sin la aprobación de una persona.</p>
+    <table>
+      <tr><th>Proveedor</th><th>Precio</th><th>Exceso sobre límite</th></tr>
+      ${outside.map(o => `<tr><td>${escapeHtml(o.name)}</td><td>${fmt(o.price)}</td><td>${fmt(o.price - c.limit)} ${c.unit}</td></tr>`).join('')}
+    </table>
+    <label style="display:flex;align-items:center;gap:8px;margin-top:12px;color:var(--ink)">
+      <input type="checkbox" id="approve" ${state.approved ? 'checked' : ''}> Apruebo mantener las ofertas fuera de límite como alternativa (decisión del comprador)
+    </label>
+    <div class="actions"><span class="note"></span><button class="primary" data-next>Continuar a adjudicación</button></div>`;
+}
+
+/* ---------- Paso 7: adjudicación ---------- */
+function viewAward() {
+  const c = currentCase;
+  const inLimit = state.evaluation.filter(o => o.within);
+  const best = inLimit.reduce((a, b) => (a.price <= b.price ? a : b));
+  if (!state.awarded) {
+    state.awarded = true;
+    audit('Adjudicación propuesta a ' + best.name + ' por ' + fmt(state.counterFinal) + ' ' + c.unit);
+  }
+  return `
+    <h2>7. Adjudicación</h2>
+    <p class="note">La adjudicación final la confirma una persona.</p>
+    <table>
+      <tr><th>Concepto</th><th>Valor</th></tr>
+      <tr><td>Producto</td><td>${escapeHtml(c.name)}</td></tr>
+      <tr><td>Proveedor adjudicado</td><td>${escapeHtml(best.name)}</td></tr>
+      <tr><td>Precio</td><td>${fmt(state.counterFinal)} ${c.unit}</td></tr>
+      <tr><td>Volumen</td><td>${c.volume}</td></tr>
+      <tr><td>Importe total (simulado)</td><td>${fmt(state.counterFinal * c.volume)} €</td></tr>
+    </table>
+    <div class="actions"><span class="note"></span><button class="primary" data-next>Confirmar adjudicación</button></div>`;
+}
+
+/* ---------- Paso 8: ERP ---------- */
+function viewErp() {
+  if (!state.erpId) {
+    state.erpId = 'PO-' + Math.floor(100000 + Math.random() * 900000);
+    audit('Pedido ' + state.erpId + ' enviado al ERP (simulado)');
+  }
+  return `
+    <h2>8. Envío al ERP</h2>
+    <p class="note">ERP simulado. No hay ninguna conexión con sistemas reales.</p>
+    <div class="kpi">
+      <div><span>Número de pedido</span><strong>${state.erpId}</strong></div>
+      <div><span>Estado</span><strong><span class="tag ok">Creado</span></strong></div>
+    </div>
+    <div class="actions"><span class="note"></span><button class="primary" data-next>Ver auditoría</button></div>`;
+}
+
+/* ---------- Paso 9: auditoría final ---------- */
+function viewAudit() {
+  const c = currentCase;
+  const best = state.evaluation.filter(o => o.within).reduce((a, b) => (a.price <= b.price ? a : b));
+  const savings = 1 - state.counterFinal / c.baseline;
+  audit('Proceso completado. Ahorro simulado: ' + pct(savings));
+  return `
+    <h2>9. Resumen final</h2>
+    <div class="kpi">
+      <div><span>Ahorro frente a referencia</span><strong>${pct(savings)}</strong></div>
+      <div><span>Proveedor</span><strong style="font-size:16px">${escapeHtml(best.name)}</strong></div>
+      <div><span>Pedido ERP</span><strong style="font-size:16px">${state.erpId}</strong></div>
+    </div>
+    <p class="note" style="margin-top:12px">Todos los datos son ficticios.</p>
+    <div class="actions"><span class="note"></span><button data-restart>Reiniciar demo</button></div>`;
+}
+
+/* ---------- Eventos ---------- */
+function bind() {
+  document.querySelectorAll('[data-inv]').forEach(cb => cb.onchange = () => {
+    const i = Number(cb.dataset.inv);
+    if (cb.checked) state.invited.push(i); else state.invited = state.invited.filter(x => x !== i);
+    render();
+  });
+  document.querySelectorAll('[data-next]').forEach(b => b.onclick = () => {
+    const approve = document.getElementById('approve');
+    if (approve) { state.approved = approve.checked; if (approve.checked) audit('Persona aprueba mantener ofertas fuera de límite como alternativa'); }
+    if (STEPS[state.step].id === 'review' && state.evaluation.some(o => !o.within)) {
+      audit('Revisión humana completada');
+    }
+    if (STEPS[state.step].id === 'award') audit('Adjudicación confirmada por persona');
+    next();
+  });
+  document.querySelectorAll('[data-restart]').forEach(b => b.onclick = () => {
+    resetState(); render();
+  });
+}
+
+resetState();
+render();
+</script>
+</body>
+</html>
