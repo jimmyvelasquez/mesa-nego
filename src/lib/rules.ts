@@ -20,10 +20,15 @@ export function bestWithinLimit(evaluations: Evaluation[]): Evaluation | undefin
 
 /**
  * Contraoferta: aplica una mejora porcentual al precio, redondeada al entero.
- * Nunca devuelve un precio por debajo de 0.
+ *
+ * - Nunca sube el precio: el resultado nunca supera `price`.
+ * - Nunca baja de `floor` (suelo que fija el comprador o el proveedor), si se indica.
+ * - Nunca devuelve un valor negativo.
  */
-export function counterOffer(price: number, pct: number): number {
-  return Math.max(0, Math.round(price * (1 - pct)));
+export function counterOffer(price: number, pct: number, floor = 0): number {
+  const improved = Math.round(price * (1 - pct));
+  const bounded = Math.max(floor, improved, 0);
+  return Math.min(bounded, price);
 }
 
 /** Ahorro relativo frente al precio de referencia (0 si no hay ahorro). */

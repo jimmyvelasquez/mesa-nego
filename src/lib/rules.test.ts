@@ -82,6 +82,14 @@ describe('counterOffer', () => {
   it('sin mejora devuelve el mismo precio', () => {
     expect(counterOffer(1000, 0)).toBe(1000);
   });
+
+  it('no baja del suelo indicado', () => {
+    expect(counterOffer(300, 0.5, 250)).toBe(250);
+  });
+
+  it('no sube el precio aunque el suelo esté por encima', () => {
+    expect(counterOffer(298, 0.02, 500)).toBe(298);
+  });
 });
 
 describe('savingsVsBaseline', () => {

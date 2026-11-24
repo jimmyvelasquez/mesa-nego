@@ -1,5 +1,6 @@
 import type { Evaluation, PurchaseCase } from './types';
-import { bestWithinLimit, counterOffer, evaluateOffers, savingsVsBaseline } from './rules';
+import { bestWithinLimit, evaluateOffers, savingsVsBaseline } from './rules';
+import { ruleAgent, type AgentAction } from './agent';
 
 /**
  * Pasos del flujo (índice = valor de `step`):
@@ -104,17 +105,25 @@ export function reducer(state: NegotiationState, action: Action): NegotiationSta
     }
 
     case 'negotiate': {
-      const best = state.evaluation ? bestWithinLimit(state.evaluation) : undefined;
-      if (best === undefined) return state;
-      const counterFinal = counterOffer(best.price, action.caseData.counterPct);
-      return {
-        ...state,
-        counterFinal,
-        audit: append(state, [
-          { at: action.at, message: `Agente contraoferta a ${best.name}: ${counterFinal} ${action.caseData.unit}` },
-          { at: action.at, message: 'Agente cierra ronda con contraoferta dentro de límites' },
-        ]),
-      };
+      if (!state.evaluation) return state;
+      const offers = state.evaluation.map(({ name, price }) => ({ name, price }));
+      const actions = ruleAgent.decide({
+        offers,
+        limit: action.caseData.limit,
+        counterPct: action.caseData.counterPct,
+      });
+      const counter = actions.find((a): a is Extract<AgentAction, { type: 'counter' }> => a.type === 'counter');
+      if (counter === undefined) return state;
+      const entries: AuditEntry[] = [
+        { at: action.at, message: `Agente contraoferta a ${counter.supplier}: ${counter.price} ${action.caseData.unit}` },
+      ];
+      for (const a of actions) {
+        if (a.type === 'escalate') {
+          entries.push({ at: action.at, message: `Agente escala a persona: ${a.supplier} fuera de límite` });
+        }
+      }
+      entries.push({ at: action.at, message: 'Agente cierra ronda con contraoferta dentro de límites' });
+      return { ...state, counterFinal: counter.price, audit: append(state, entries) };
     }
 
     case 'setApproved':
