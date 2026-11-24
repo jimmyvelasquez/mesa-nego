@@ -6,6 +6,7 @@ Proyecto: `mesa-nego` (eu-west-1). Migraciones en `migrations/`, aplicadas en or
 2. `20261125000100_rls.sql`: activación de RLS y políticas por empresa.
 3. `20261125000200_fix_definer.sql`: corrección tras las pruebas (el trigger y la comprobación de la oferta necesitan `security definer`).
 4. `20261125000300_seguridad_esquemas.sql`: funciones auxiliares movidas al esquema `private` (no expuesto por la API), vista definer sustituida por `my_supplier_invitations()`.
+5. `20261125000400_flujo_ofertas.sql`: API del flujo (abrir compra, invitar, ofertar, retirar, adjudicar).
 
 ## Reglas que impone la base de datos
 
@@ -17,11 +18,14 @@ Proyecto: `mesa-nego` (eu-west-1). Migraciones en `migrations/`, aplicadas en or
 
 ## Pruebas
 
-`tests/rls_test.sql` comprueba los accesos por rol (comprador, proveedor invitado y proveedor ajeno) y las reglas de auditoría. Se ejecuta como superusuario y termina sin error si todo pasa.
+`tests/rls_test.sql` comprueba los accesos por rol (comprador, proveedor invitado y proveedor ajeno) y las reglas de auditoría.
+`tests/flujo_test.sql` recorre el flujo completo (invitar, ofertar, fuera de límite, adjudicar, retirar) dentro de una transacción que termina en ROLLBACK, así que no deja datos.
+Ambas se ejecutan como superusuario y terminan sin error si todo pasa.
 
 ## Avisos de seguridad aceptados
 
-Supabase marca dos funciones `SECURITY DEFINER` ejecutables por usuarios autenticados. Son intencionadas:
+Supabase marca las funciones `SECURITY DEFINER` ejecutables por usuarios autenticados. Son intencionadas: son la API del flujo, y cada una valida rol, pertenencia y estado dentro de la función.
 
 - `accept_invitation(text)`: única vía para que un proveedor cambie el estado de una invitación; valida token y empresa.
 - `my_supplier_invitations()`: solo lectura, filtrada por la empresa del usuario.
+- `open_purchase_request`, `create_invitation`, `submit_offer`, `withdraw_offer` y `approve_award`: la API de escritura del flujo.
