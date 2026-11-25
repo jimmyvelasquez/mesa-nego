@@ -8,7 +8,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
  */
 
 const APP_URL = Deno.env.get('APP_URL') ?? 'https://mesa-nego.vercel.app';
-const FROM = Deno.env.get('INVITE_FROM') ?? 'Mesa Nego <onboarding@resend.dev>';
+const FROM = Deno.env.get('INVITE_FROM') ?? 'Mesa Nego <no-reply@mail.intiempresas.com>';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
