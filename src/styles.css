@@ -161,7 +161,8 @@ label.check {
 }
 
 input[type='number'],
-input[type='text'] {
+input[type='text'],
+input[type='email'] {
   width: 100%;
   padding: 8px 10px;
   border: 1px solid var(--line);
@@ -256,4 +257,35 @@ th {
   align-items: center;
   margin-top: 16px;
   flex-wrap: wrap;
+}
+
+.narrow {
+  max-width: 440px;
+  margin: 24px auto;
+}
+
+.center {
+  text-align: center;
+  margin-top: 48px;
+}
+
+.msg {
+  font-size: 14px;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 12px 0 0;
+}
+
+.msg.ok {
+  background: #dcfce7;
+  color: var(--ok);
+}
+
+.msg.error {
+  background: #fee2e2;
+  color: var(--bad);
+}
+
+.app-header button {
+  align-self: center;
 }
