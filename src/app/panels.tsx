@@ -4,7 +4,9 @@ import {
   acceptInvitation,
   approveAward,
   listBuyerOffers,
+  listSupplierCompanies,
   rejectOffer,
+  type SupplierCompany,
   listMyInvitations,
   listMyOffers,
   openPurchaseRequest,
@@ -32,7 +34,7 @@ const STATUS_LABEL: Record<RequestRow['status'], string> = {
 };
 
 /** Formulario del comprador: envía por correo la invitación de una compra a un proveedor. */
-function InviteForm({ requests }: { requests: RequestRow[] }) {
+function InviteForm({ requests, suppliers }: { requests: RequestRow[]; suppliers: SupplierCompany[] }) {
   const [requestId, setRequestId] = useState('');
   const [supplierCompanyId, setSupplierCompanyId] = useState('');
   const [email, setEmail] = useState('');
@@ -44,7 +46,7 @@ function InviteForm({ requests }: { requests: RequestRow[] }) {
     setMessage(null);
     setSending(true);
     try {
-      await sendInvitationEmail(requestId, supplierCompanyId.trim(), email.trim());
+      await sendInvitationEmail(requestId, supplierCompanyId, email.trim());
       setEmail('');
       setMessage({ kind: 'ok', text: 'Invitación enviada por correo.' });
     } catch (err) {
@@ -66,14 +68,20 @@ function InviteForm({ requests }: { requests: RequestRow[] }) {
           </option>
         ))}
       </select>
-      <label htmlFor="inv-supplier">ID de la empresa proveedora</label>
-      <input
+      <label htmlFor="inv-supplier">Empresa proveedora</label>
+      <select
         id="inv-supplier"
-        type="text"
         value={supplierCompanyId}
         onChange={(e) => setSupplierCompanyId(e.target.value)}
         required
-      />
+      >
+        <option value="">Selecciona un proveedor</option>
+        {suppliers.map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.name}
+          </option>
+        ))}
+      </select>
       <label htmlFor="inv-email">Correo del proveedor</label>
       <input id="inv-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
       <div className="actions">
@@ -91,6 +99,7 @@ function InviteForm({ requests }: { requests: RequestRow[] }) {
 export function BuyerPanel() {
   const [rows, setRows] = useState<RequestRow[]>([]);
   const [offers, setOffers] = useState<BuyerOffer[]>([]);
+  const [suppliers, setSuppliers] = useState<SupplierCompany[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
@@ -105,10 +114,13 @@ export function BuyerPanel() {
     setRows((data ?? []) as RequestRow[]);
     try {
       setOffers(await listBuyerOffers());
+      setSuppliers(await listSupplierCompanies());
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudieron cargar las ofertas');
     }
   }
+
+  const supplierName = (id: string) => suppliers.find((s) => s.id === id)?.name ?? id.slice(0, 8) + '…';
 
   async function award(requestId: string, offerId: string) {
     setError(null);
@@ -197,7 +209,7 @@ export function BuyerPanel() {
               return (
                 <tr key={o.id}>
                   <td>{request?.product_name ?? '—'}</td>
-                  <td>{o.supplier_company_id.slice(0, 8)}…</td>
+                  <td>{supplierName(o.supplier_company_id)}</td>
                   <td>{o.price}</td>
                   <td>{o.within_limit ? 'Sí' : 'No'}</td>
                   <td>{o.status}</td>
@@ -218,7 +230,9 @@ export function BuyerPanel() {
         </table>
       )}
 
-      {rows.length > 0 && <InviteForm requests={rows.filter((r) => r.status !== 'cancelled')} />}
+      {rows.length > 0 && (
+        <InviteForm requests={rows.filter((r) => r.status !== 'cancelled')} suppliers={suppliers} />
+      )}
     </section>
   );
 }

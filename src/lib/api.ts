@@ -70,6 +70,14 @@ export interface BuyerOffer {
   within_limit: boolean;
 }
 
+export interface SupplierCompany {
+  id: string;
+  name: string;
+}
+
+/** Comprador: lista las empresas proveedoras (id y nombre) para invitarlas o identificarlas. */
+export const listSupplierCompanies = () => call<SupplierCompany[]>('list_supplier_companies');
+
 /** Comprador: rechaza una oferta en estado 'submitted' (decisión humana, queda en decisions y audit_log). */
 export const rejectOffer = (requestId: string, offerId: string) =>
   call<void>('reject_offer', { p_request_id: requestId, p_offer_id: offerId });
