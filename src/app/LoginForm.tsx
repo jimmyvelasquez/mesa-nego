@@ -2,8 +2,8 @@ import { useState, type FormEvent } from 'react';
 import { supabase } from '../lib/supabase';
 
 /**
- * Inicio de sesión con enlace mágico. No crea cuentas nuevas: el alta la hace
- * un administrador, así que solo entran usuarios ya dados de alta.
+ * Inicio de sesión con enlace mágico. Permite el alta solo a correos con una
+ * invitación pendiente: lo valida el hook hook_before_user_created en la base de datos.
  */
 export function LoginForm() {
   const [email, setEmail] = useState('');
@@ -20,13 +20,13 @@ export function LoginForm() {
       email: email.trim(),
       options: {
         emailRedirectTo: `${window.location.origin}/app`,
-        shouldCreateUser: false,
+        shouldCreateUser: true,
       },
     });
 
     setBusy(false);
     if (authError) {
-      setError('No pudimos enviar el enlace. Revisa el correo o pide al administrador que te dé de alta.');
+      setError('No pudimos enviar el enlace. Revisa el correo o pide al comprador que te envíe una invitación.');
       return;
     }
     setSent(true);

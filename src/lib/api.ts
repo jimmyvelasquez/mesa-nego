@@ -27,7 +27,7 @@ async function call<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
 export const openPurchaseRequest = (requestId: string) =>
   call<void>('open_purchase_request', { p_request_id: requestId });
 
-/** Comprador: invita a un proveedor. Devuelve el token en claro, una sola vez. */
+/** Comprador: invita a un proveedor existente. Devuelve el token en claro, una sola vez. */
 export const createInvitation = (requestId: string, supplierCompanyId: string, days = 7) =>
   call<string>('create_invitation', {
     p_request_id: requestId,
@@ -36,10 +36,21 @@ export const createInvitation = (requestId: string, supplierCompanyId: string, d
   });
 
 /** Comprador: crea la invitación y la envía por correo (Edge Function send-invitation). El código no se muestra en pantalla. */
-export async function sendInvitationEmail(requestId: string, supplierCompanyId: string, email: string): Promise<void> {
+export async function sendInvitationEmail(
+  requestId: string,
+  email: string,
+  target: { supplierCompanyId?: string; supplierName?: string },
+): Promise<void> {
   const { data, error } = await supabase.functions.invoke<{ ok?: boolean; error?: string; detail?: string }>(
     'send-invitation',
-    { body: { request_id: requestId, supplier_company_id: supplierCompanyId, email } },
+    {
+      body: {
+        request_id: requestId,
+        email,
+        supplier_company_id: target.supplierCompanyId,
+        supplier_name: target.supplierName,
+      },
+    },
   );
   if (error) {
     // Con un estado no 2xx, el cuerpo JSON de la función trae el motivo real.

@@ -1,6 +1,6 @@
 import { AuthProvider, useAuth } from './AuthContext';
 import { LoginForm } from './LoginForm';
-import { BuyerPanel, SupplierPanel } from './panels';
+import { BuyerPanel, NewSupplierPanel, SupplierPanel } from './panels';
 
 /** Área autenticada de Mesa Nego, en la ruta /app. */
 export default function AppRoot() {
@@ -39,12 +39,7 @@ function Gate() {
   if (!profile) {
     return (
       <Shell onSignOut={signOut}>
-        <section className="card narrow">
-          <h2>Cuenta sin empresa</h2>
-          <p className="note">
-            Tu usuario todavía no está asignado a ninguna empresa. Pide al administrador que te dé de alta.
-          </p>
-        </section>
+        <NewSupplierPanel />
       </Shell>
     );
   }

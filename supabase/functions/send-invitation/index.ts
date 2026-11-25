@@ -2,8 +2,9 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 
 /**
  * Envía por correo el código de invitación a un proveedor.
- * - Valida la sesión del comprador (verify_jwt) y deja que create_invitation
+ * - Valida la sesión del comprador (verify_jwt) y deja que invite_supplier
  *   compruebe rol, pertenencia y estado con el JWT del propio llamante.
+ * - Puede invitar a una empresa existente (supplier_company_id) o crear una nueva (supplier_name).
  * - El código solo viaja por correo; no se devuelve al navegador.
  */
 
@@ -19,12 +20,19 @@ const CORS = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 
+interface Body {
+  request_id?: string;
+  supplier_company_id?: string;
+  supplier_name?: string;
+  email?: string;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json({ error: 'Método no permitido' }, 405);
 
   const authHeader = req.headers.get('Authorization') ?? '';
-  let body: { request_id?: string; supplier_company_id?: string; email?: string };
+  let body: Body;
   try {
     body = await req.json();
   } catch {
@@ -32,22 +40,24 @@ Deno.serve(async (req: Request) => {
   }
 
   const requestId = body.request_id?.trim();
-  const supplierCompanyId = body.supplier_company_id?.trim();
+  const supplierCompanyId = body.supplier_company_id?.trim() || null;
+  const supplierName = body.supplier_name?.trim() || null;
   const email = body.email?.trim().toLowerCase();
-  if (!requestId || !supplierCompanyId || !email || !email.includes('@')) {
-    return json({ error: 'Faltan datos: compra, proveedor o correo' }, 400);
+  if (!requestId || !email || !email.includes('@') || (!supplierCompanyId && !supplierName)) {
+    return json({ error: 'Faltan datos: compra, correo y empresa proveedora' }, 400);
   }
 
-  // Cliente con el JWT del comprador: las funciones SQL aplican RLS y roles.
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_ANON_KEY')!,
     { global: { headers: { Authorization: authHeader } } },
   );
 
-  const { data: token, error: rpcError } = await supabase.rpc('create_invitation', {
+  const { data: token, error: rpcError } = await supabase.rpc('invite_supplier', {
     p_request_id: requestId,
+    p_email: email,
     p_supplier_company_id: supplierCompanyId,
+    p_supplier_name: supplierCompanyId ? null : supplierName,
     p_days: 7,
   });
   if (rpcError) return json({ error: rpcError.message }, 403);
@@ -63,11 +73,7 @@ Deno.serve(async (req: Request) => {
       from: FROM,
       to: [email],
       subject: 'Invitación a una compra en Mesa Nego',
-      html: `<p>Has sido invitado a presentar una oferta en Mesa Nego.</p>
-<p><a href="${link}">Aceptar la invitación</a></p>
-<p>Si el enlace no funciona, copia este código en la pantalla de invitación:</p>
-<p><code>${token}</code></p>
-<p>La invitación caduca en 7 días y solo puede usarse una vez.</p>`,
+      html: `<p>Has sido invitado a presentar una oferta en Mesa Nego.</p><p>Entra con este mismo correo (${email}) para aceptarla.</p><p><a href="${link}">Aceptar la invitación</a></p><p>Si el enlace no funciona, copia este código en la pantalla de invitación:</p><p><code>${token}</code></p><p>La invitación caduca en 7 días y solo puede usarse una vez.</p>`,
     }),
   });
 

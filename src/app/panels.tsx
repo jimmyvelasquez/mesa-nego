@@ -36,18 +36,27 @@ const STATUS_LABEL: Record<RequestRow['status'], string> = {
 /** Formulario del comprador: envía por correo la invitación de una compra a un proveedor. */
 function InviteForm({ requests, suppliers }: { requests: RequestRow[]; suppliers: SupplierCompany[] }) {
   const [requestId, setRequestId] = useState('');
+  const [mode, setMode] = useState<'existing' | 'new'>(suppliers.length > 0 ? 'existing' : 'new');
   const [supplierCompanyId, setSupplierCompanyId] = useState('');
+  const [supplierName, setSupplierName] = useState('');
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const [sending, setSending] = useState(false);
+
+  const targetReady = mode === 'existing' ? supplierCompanyId !== '' : supplierName.trim() !== '';
 
   async function send(e: FormEvent) {
     e.preventDefault();
     setMessage(null);
     setSending(true);
     try {
-      await sendInvitationEmail(requestId, supplierCompanyId, email.trim());
+      await sendInvitationEmail(
+        requestId,
+        email.trim(),
+        mode === 'existing' ? { supplierCompanyId } : { supplierName: supplierName.trim() },
+      );
       setEmail('');
+      setSupplierName('');
       setMessage({ kind: 'ok', text: 'Invitación enviada por correo.' });
     } catch (err) {
       setMessage({ kind: 'error', text: err instanceof Error ? err.message : 'No se pudo enviar la invitación' });
@@ -68,25 +77,43 @@ function InviteForm({ requests, suppliers }: { requests: RequestRow[]; suppliers
           </option>
         ))}
       </select>
-      <label htmlFor="inv-supplier">Empresa proveedora</label>
-      <select
-        id="inv-supplier"
-        value={supplierCompanyId}
-        onChange={(e) => setSupplierCompanyId(e.target.value)}
-        required
-      >
-        <option value="">Selecciona un proveedor</option>
-        {suppliers.map((s) => (
-          <option key={s.id} value={s.id}>
-            {s.name}
-          </option>
-        ))}
-      </select>
+      <div className="actions">
+        <button type="button" disabled={mode === 'existing'} onClick={() => setMode('existing')}>
+          Proveedor existente
+        </button>
+        <button type="button" disabled={mode === 'new'} onClick={() => setMode('new')}>
+          Proveedor nuevo
+        </button>
+      </div>
+      {mode === 'existing' ? (
+        <>
+          <label htmlFor="inv-supplier">Empresa proveedora</label>
+          <select
+            id="inv-supplier"
+            value={supplierCompanyId}
+            onChange={(e) => setSupplierCompanyId(e.target.value)}
+            required
+          >
+            <option value="">Selecciona un proveedor</option>
+            {suppliers.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </>
+      ) : (
+        <>
+          <label htmlFor="inv-name">Nombre de la empresa proveedora</label>
+          <input id="inv-name" type="text" value={supplierName} onChange={(e) => setSupplierName(e.target.value)} required />
+        </>
+      )}
       <label htmlFor="inv-email">Correo del proveedor</label>
       <input id="inv-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+      <p className="note">La invitación solo funciona con este correo: el proveedor debe entrar con él.</p>
       <div className="actions">
         <span className="note"></span>
-        <button className="primary" type="submit" disabled={sending || !requestId || !supplierCompanyId || !email}>
+        <button className="primary" type="submit" disabled={sending || !requestId || !targetReady || !email}>
           {sending ? 'Enviando…' : 'Enviar invitación'}
         </button>
       </div>
@@ -415,5 +442,44 @@ export function SupplierPanel({ profile }: { profile: Profile }) {
         )}
       </section>
     </>
+  );
+}
+
+/** Usuario sin empresa: acepta una invitación con el código y entra como proveedor. */
+export function NewSupplierPanel() {
+  const [token, setToken] = useState(() => new URLSearchParams(window.location.search).get('token') ?? '');
+  const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function accept(e: FormEvent) {
+    e.preventDefault();
+    setMessage(null);
+    setBusy(true);
+    try {
+      await acceptInvitation(token.trim());
+      // Recargar: el perfil nuevo se lee al iniciar la app.
+      window.location.replace('/app');
+    } catch (err) {
+      setBusy(false);
+      setMessage({ kind: 'error', text: err instanceof Error ? err.message : 'No se pudo aceptar la invitación' });
+    }
+  }
+
+  return (
+    <section className="card narrow">
+      <h2>Aceptar una invitación</h2>
+      <p className="note">Pega el código que te enviaron. Debes entrar con el correo al que llegó la invitación.</p>
+      <form onSubmit={accept}>
+        <label htmlFor="token">Código de invitación</label>
+        <input id="token" type="text" value={token} onChange={(e) => setToken(e.target.value)} required />
+        <div className="actions">
+          <span className="note"></span>
+          <button className="primary" type="submit" disabled={busy || token.trim() === ''}>
+            {busy ? 'Aceptando…' : 'Aceptar'}
+          </button>
+        </div>
+      </form>
+      {message && <p className={`msg ${message.kind}`}>{message.text}</p>}
+    </section>
   );
 }
