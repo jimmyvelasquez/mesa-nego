@@ -55,6 +55,19 @@ export const acceptInvitation = (token: string) => call<string>('accept_invitati
 /** Proveedor: lista sus invitaciones (sin límite, suelo ni precio de referencia). */
 export const listMyInvitations = () => call<SupplierInvitation[]>('my_supplier_invitations');
 
+export interface SupplierOffer {
+  purchase_request_id: string;
+  price: number;
+  status: 'submitted' | 'countered' | 'withdrawn';
+}
+
+/** Proveedor: lee sus propias ofertas (la política RLS limita la lectura a su empresa). */
+export async function listMyOffers(): Promise<SupplierOffer[]> {
+  const { data, error } = await supabase.from('offers').select('purchase_request_id, price, status');
+  if (error) throw new Error(error.message);
+  return (data ?? []) as SupplierOffer[];
+}
+
 /** Proveedor: envía o corrige su oferta mientras esté en estado 'submitted'. */
 export const submitOffer = (requestId: string, price: number) =>
   call<string>('submit_offer', { p_request_id: requestId, p_price: price });

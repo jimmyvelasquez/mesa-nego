@@ -3,9 +3,13 @@ import { supabase } from '../lib/supabase';
 import {
   acceptInvitation,
   listMyInvitations,
+  listMyOffers,
   openPurchaseRequest,
   sendInvitationEmail,
+  submitOffer,
+  withdrawOffer,
   type SupplierInvitation,
+  type SupplierOffer,
 } from '../lib/api';
 import type { Profile } from './AuthContext';
 
@@ -142,15 +146,84 @@ export function BuyerPanel() {
   );
 }
 
+/** Fila de oferta del proveedor: enviar o corregir el precio, o retirar la oferta. */
+function OfferRow({
+  invitation,
+  offer,
+  onChanged,
+}: {
+  invitation: SupplierInvitation;
+  offer: SupplierOffer | undefined;
+  onChanged: () => Promise<void>;
+}) {
+  const [price, setPrice] = useState(offer ? String(offer.price) : '');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const editable = !offer || offer.status === 'submitted';
+
+  async function run(action: () => Promise<unknown>) {
+    setError(null);
+    setBusy(true);
+    try {
+      await action();
+      await onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo guardar la oferta');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <tr>
+      <td>{invitation.product_name}</td>
+      <td>{offer ? offer.status : 'Sin oferta'}</td>
+      <td>
+        {editable ? (
+          <input
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            aria-label={`Precio para ${invitation.product_name}`}
+          />
+        ) : (
+          offer?.price
+        )}
+      </td>
+      <td>
+        {editable && (
+          <button
+            className="primary"
+            disabled={busy || price.trim() === '' || Number(price) <= 0}
+            onClick={() => run(() => submitOffer(invitation.purchase_request_id, Number(price)))}
+          >
+            {offer ? 'Actualizar' : 'Enviar oferta'}
+          </button>
+        )}
+        {offer?.status === 'submitted' && (
+          <button disabled={busy} onClick={() => run(() => withdrawOffer(invitation.purchase_request_id))}>
+            Retirar
+          </button>
+        )}
+        {error && <p className="msg error">{error}</p>}
+      </td>
+    </tr>
+  );
+}
+
 /** Panel del proveedor: acepta invitaciones con el token y lista las suyas. */
 export function SupplierPanel({ profile }: { profile: Profile }) {
   const [invitations, setInvitations] = useState<SupplierInvitation[]>([]);
+  const [offers, setOffers] = useState<SupplierOffer[]>([]);
   const [token, setToken] = useState(() => new URLSearchParams(window.location.search).get('token') ?? '');
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
 
   async function load() {
     try {
       setInvitations(await listMyInvitations());
+      setOffers(await listMyOffers());
     } catch (e) {
       setMessage({ kind: 'error', text: e instanceof Error ? e.message : 'No se pudieron cargar las invitaciones' });
     }
@@ -189,6 +262,36 @@ export function SupplierPanel({ profile }: { profile: Profile }) {
           </div>
         </form>
         {message && <p className={`msg ${message.kind}`}>{message.text}</p>}
+      </section>
+
+      <section className="card">
+        <h2>Mis ofertas</h2>
+        {invitations.filter((i) => i.status === 'accepted').length === 0 ? (
+          <p className="note">Acepta una invitación para poder enviar una oferta.</p>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th>Estado</th>
+                <th>Precio</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {invitations
+                .filter((i) => i.status === 'accepted')
+                .map((i) => (
+                  <OfferRow
+                    key={i.id}
+                    invitation={i}
+                    offer={offers.find((o) => o.purchase_request_id === i.purchase_request_id)}
+                    onChanged={load}
+                  />
+                ))}
+            </tbody>
+          </table>
+        )}
       </section>
 
       <section className="card">
