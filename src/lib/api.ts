@@ -37,10 +37,15 @@ export const createInvitation = (requestId: string, supplierCompanyId: string, d
 
 /** Comprador: crea la invitación y la envía por correo (Edge Function send-invitation). El código no se muestra en pantalla. */
 export async function sendInvitationEmail(requestId: string, supplierCompanyId: string, email: string): Promise<void> {
-  const { data, error } = await supabase.functions.invoke<{ ok?: boolean; error?: string }>('send-invitation', {
-    body: { request_id: requestId, supplier_company_id: supplierCompanyId, email },
-  });
-  if (error) throw new Error(error.message);
+  const { data, error } = await supabase.functions.invoke<{ ok?: boolean; error?: string; detail?: string }>(
+    'send-invitation',
+    { body: { request_id: requestId, supplier_company_id: supplierCompanyId, email } },
+  );
+  if (error) {
+    // Con un estado no 2xx, el cuerpo JSON de la función trae el motivo real.
+    const body = (await error.context?.json().catch(() => null)) as { error?: string; detail?: string } | null;
+    throw new Error(body?.error ? `${body.error}${body.detail ? `: ${body.detail}` : ''}` : error.message);
+  }
   if (data?.error) throw new Error(data.error);
 }
 
