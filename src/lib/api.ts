@@ -58,7 +58,7 @@ export const listMyInvitations = () => call<SupplierInvitation[]>('my_supplier_i
 export interface SupplierOffer {
   purchase_request_id: string;
   price: number;
-  status: 'submitted' | 'countered' | 'withdrawn';
+  status: 'submitted' | 'countered' | 'withdrawn' | 'rejected';
 }
 
 export interface BuyerOffer {
@@ -66,9 +66,13 @@ export interface BuyerOffer {
   purchase_request_id: string;
   supplier_company_id: string;
   price: number;
-  status: 'submitted' | 'countered' | 'withdrawn';
+  status: 'submitted' | 'countered' | 'withdrawn' | 'rejected';
   within_limit: boolean;
 }
+
+/** Comprador: rechaza una oferta en estado 'submitted' (decisión humana, queda en decisions y audit_log). */
+export const rejectOffer = (requestId: string, offerId: string) =>
+  call<void>('reject_offer', { p_request_id: requestId, p_offer_id: offerId });
 
 /** Comprador: lee las ofertas de sus compras (la política RLS limita la lectura a sus compras). */
 export async function listBuyerOffers(): Promise<BuyerOffer[]> {

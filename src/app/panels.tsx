@@ -4,6 +4,7 @@ import {
   acceptInvitation,
   approveAward,
   listBuyerOffers,
+  rejectOffer,
   listMyInvitations,
   listMyOffers,
   openPurchaseRequest,
@@ -119,6 +120,16 @@ export function BuyerPanel() {
     }
   }
 
+  async function reject(requestId: string, offerId: string) {
+    setError(null);
+    try {
+      await rejectOffer(requestId, offerId);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo rechazar la oferta');
+    }
+  }
+
   useEffect(() => {
     void load();
   }, []);
@@ -195,6 +206,9 @@ export function BuyerPanel() {
                       <button className="primary" onClick={() => award(o.purchase_request_id, o.id)}>
                         Adjudicar
                       </button>
+                    )}
+                    {request?.status === 'open' && o.status === 'submitted' && (
+                      <button onClick={() => reject(o.purchase_request_id, o.id)}>Rechazar</button>
                     )}
                   </td>
                 </tr>
