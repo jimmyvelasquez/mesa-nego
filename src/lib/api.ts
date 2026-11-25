@@ -61,6 +61,24 @@ export interface SupplierOffer {
   status: 'submitted' | 'countered' | 'withdrawn';
 }
 
+export interface BuyerOffer {
+  id: string;
+  purchase_request_id: string;
+  supplier_company_id: string;
+  price: number;
+  status: 'submitted' | 'countered' | 'withdrawn';
+  within_limit: boolean;
+}
+
+/** Comprador: lee las ofertas de sus compras (la política RLS limita la lectura a sus compras). */
+export async function listBuyerOffers(): Promise<BuyerOffer[]> {
+  const { data, error } = await supabase
+    .from('offers')
+    .select('id, purchase_request_id, supplier_company_id, price, status, within_limit');
+  if (error) throw new Error(error.message);
+  return (data ?? []) as BuyerOffer[];
+}
+
 /** Proveedor: lee sus propias ofertas (la política RLS limita la lectura a su empresa). */
 export async function listMyOffers(): Promise<SupplierOffer[]> {
   const { data, error } = await supabase.from('offers').select('purchase_request_id, price, status');

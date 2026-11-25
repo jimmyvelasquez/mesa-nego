@@ -2,12 +2,15 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { supabase } from '../lib/supabase';
 import {
   acceptInvitation,
+  approveAward,
+  listBuyerOffers,
   listMyInvitations,
   listMyOffers,
   openPurchaseRequest,
   sendInvitationEmail,
   submitOffer,
   withdrawOffer,
+  type BuyerOffer,
   type SupplierInvitation,
   type SupplierOffer,
 } from '../lib/api';
@@ -86,6 +89,7 @@ function InviteForm({ requests }: { requests: RequestRow[] }) {
 /** Panel del comprador: lista sus compras y permite abrir las que estén en borrador. */
 export function BuyerPanel() {
   const [rows, setRows] = useState<RequestRow[]>([]);
+  const [offers, setOffers] = useState<BuyerOffer[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
@@ -93,8 +97,26 @@ export function BuyerPanel() {
       .from('purchase_requests')
       .select('id, product_name, status, created_at')
       .order('created_at', { ascending: false });
-    if (loadError) setError(loadError.message);
-    else setRows((data ?? []) as RequestRow[]);
+    if (loadError) {
+      setError(loadError.message);
+      return;
+    }
+    setRows((data ?? []) as RequestRow[]);
+    try {
+      setOffers(await listBuyerOffers());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudieron cargar las ofertas');
+    }
+  }
+
+  async function award(requestId: string, offerId: string) {
+    setError(null);
+    try {
+      await approveAward(requestId, offerId);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo adjudicar la oferta');
+    }
   }
 
   useEffect(() => {
@@ -141,6 +163,47 @@ export function BuyerPanel() {
           </tbody>
         </table>
       )}
+      <h3>Ofertas recibidas</h3>
+      {offers.length === 0 ? (
+        <p className="note">Todavía no hay ofertas.</p>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th>Proveedor</th>
+              <th>Precio</th>
+              <th>Dentro de límite</th>
+              <th>Estado</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {offers.map((o) => {
+              const request = rows.find((r) => r.id === o.purchase_request_id);
+              const canAward =
+                request?.status === 'open' && o.status === 'submitted' && o.within_limit;
+              return (
+                <tr key={o.id}>
+                  <td>{request?.product_name ?? '—'}</td>
+                  <td>{o.supplier_company_id.slice(0, 8)}…</td>
+                  <td>{o.price}</td>
+                  <td>{o.within_limit ? 'Sí' : 'No'}</td>
+                  <td>{o.status}</td>
+                  <td>
+                    {canAward && (
+                      <button className="primary" onClick={() => award(o.purchase_request_id, o.id)}>
+                        Adjudicar
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+
       {rows.length > 0 && <InviteForm requests={rows.filter((r) => r.status !== 'cancelled')} />}
     </section>
   );
