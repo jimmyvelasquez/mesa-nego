@@ -15,6 +15,7 @@ export interface SupplierInvitation {
   product_name: string;
   unit: string;
   volume: number;
+  request_status: 'draft' | 'open' | 'awarded' | 'cancelled';
 }
 
 async function call<T>(fn: string, args?: Record<string, unknown>): Promise<T> {

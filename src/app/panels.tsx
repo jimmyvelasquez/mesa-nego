@@ -277,7 +277,8 @@ function OfferRow({
   const [price, setPrice] = useState(offer ? String(offer.price) : '');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const editable = !offer || offer.status === 'submitted';
+  const requestOpen = invitation.request_status === 'open';
+  const editable = requestOpen && (!offer || offer.status === 'submitted');
 
   async function run(action: () => Promise<unknown>) {
     setError(null);
@@ -320,11 +321,12 @@ function OfferRow({
             {offer ? 'Actualizar' : 'Enviar oferta'}
           </button>
         )}
-        {offer?.status === 'submitted' && (
+        {editable && offer?.status === 'submitted' && (
           <button disabled={busy} onClick={() => run(() => withdrawOffer(invitation.purchase_request_id))}>
             Retirar
           </button>
         )}
+        {!requestOpen && <span className="note">Compra cerrada</span>}
         {error && <p className="msg error">{error}</p>}
       </td>
     </tr>
