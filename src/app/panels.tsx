@@ -1,6 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { supabase } from '../lib/supabase';
-import { acceptInvitation, listMyInvitations, openPurchaseRequest, type SupplierInvitation } from '../lib/api';
+import {
+  acceptInvitation,
+  listMyInvitations,
+  openPurchaseRequest,
+  sendInvitationEmail,
+  type SupplierInvitation,
+} from '../lib/api';
 import type { Profile } from './AuthContext';
 
 interface RequestRow {
@@ -16,6 +22,62 @@ const STATUS_LABEL: Record<RequestRow['status'], string> = {
   awarded: 'Adjudicada',
   cancelled: 'Cancelada',
 };
+
+/** Formulario del comprador: envía por correo la invitación de una compra a un proveedor. */
+function InviteForm({ requests }: { requests: RequestRow[] }) {
+  const [requestId, setRequestId] = useState('');
+  const [supplierCompanyId, setSupplierCompanyId] = useState('');
+  const [email, setEmail] = useState('');
+  const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  const [sending, setSending] = useState(false);
+
+  async function send(e: FormEvent) {
+    e.preventDefault();
+    setMessage(null);
+    setSending(true);
+    try {
+      await sendInvitationEmail(requestId, supplierCompanyId.trim(), email.trim());
+      setEmail('');
+      setMessage({ kind: 'ok', text: 'Invitación enviada por correo.' });
+    } catch (err) {
+      setMessage({ kind: 'error', text: err instanceof Error ? err.message : 'No se pudo enviar la invitación' });
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <form onSubmit={send}>
+      <h3>Invitar proveedor</h3>
+      <label htmlFor="inv-request">Compra</label>
+      <select id="inv-request" value={requestId} onChange={(e) => setRequestId(e.target.value)} required>
+        <option value="">Selecciona una compra</option>
+        {requests.map((r) => (
+          <option key={r.id} value={r.id}>
+            {r.product_name}
+          </option>
+        ))}
+      </select>
+      <label htmlFor="inv-supplier">ID de la empresa proveedora</label>
+      <input
+        id="inv-supplier"
+        type="text"
+        value={supplierCompanyId}
+        onChange={(e) => setSupplierCompanyId(e.target.value)}
+        required
+      />
+      <label htmlFor="inv-email">Correo del proveedor</label>
+      <input id="inv-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+      <div className="actions">
+        <span className="note"></span>
+        <button className="primary" type="submit" disabled={sending || !requestId || !supplierCompanyId || !email}>
+          {sending ? 'Enviando…' : 'Enviar invitación'}
+        </button>
+      </div>
+      {message && <p className={`msg ${message.kind}`}>{message.text}</p>}
+    </form>
+  );
+}
 
 /** Panel del comprador: lista sus compras y permite abrir las que estén en borrador. */
 export function BuyerPanel() {
@@ -75,6 +137,7 @@ export function BuyerPanel() {
           </tbody>
         </table>
       )}
+      {rows.length > 0 && <InviteForm requests={rows.filter((r) => r.status !== 'cancelled')} />}
     </section>
   );
 }
@@ -82,7 +145,7 @@ export function BuyerPanel() {
 /** Panel del proveedor: acepta invitaciones con el token y lista las suyas. */
 export function SupplierPanel({ profile }: { profile: Profile }) {
   const [invitations, setInvitations] = useState<SupplierInvitation[]>([]);
-  const [token, setToken] = useState('');
+  const [token, setToken] = useState(() => new URLSearchParams(window.location.search).get('token') ?? '');
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
 
   async function load() {

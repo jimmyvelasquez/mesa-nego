@@ -35,6 +35,15 @@ export const createInvitation = (requestId: string, supplierCompanyId: string, d
     p_days: days,
   });
 
+/** Comprador: crea la invitación y la envía por correo (Edge Function send-invitation). El código no se muestra en pantalla. */
+export async function sendInvitationEmail(requestId: string, supplierCompanyId: string, email: string): Promise<void> {
+  const { data, error } = await supabase.functions.invoke<{ ok?: boolean; error?: string }>('send-invitation', {
+    body: { request_id: requestId, supplier_company_id: supplierCompanyId, email },
+  });
+  if (error) throw new Error(error.message);
+  if (data?.error) throw new Error(data.error);
+}
+
 /** Proveedor: acepta la invitación con el token recibido. Devuelve el id de la compra. */
 export const acceptInvitation = (token: string) => call<string>('accept_invitation', { p_token: token });
 
